@@ -955,7 +955,7 @@ function printSubGroupAt(i) { const g = subGroups[i]; if (g) printSubGroup(g); }
 function printSubGroup(g) {
   const key = 'gas_order_' + currentUser.email;
   let mem = {}; try { mem = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) {}
-  const school = currentUser.schoolName || '', sch = /^โรงเรียน/.test(school) ? school : 'โรงเรียน' + school;
+  const school = currentUser.schoolName || '', sch = /^โรงเรียน/.test(school) ? school : '' + school;
   const today = new Date(), pad = n => String(n).padStart(2, '0');
   const todayIso = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
   const inp = 'style="width:100%;margin:2px 0 8px;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:14px"';
