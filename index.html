@@ -375,25 +375,17 @@ body { font-family:'Sarabun',sans-serif; background:#f8fafc; }
 <div id="printContainer"></div>
 
 <script>
-// ===== v3.8: ดีดตัวเองออกจาก iframe อัตโนมัติ (ต้องอยู่บนสุดของสคริปต์ ก่อนโค้ดอื่นทั้งหมด) =====
-// ถ้าหน้านี้ถูกเปิดอยู่ใน iframe ของเว็บไซต์อื่น หรือถูกพรีวิวเป็น iframe โดยแอปแชท/เบราว์เซอร์บางตัว
-// ให้สั่งหน้าต่างบนสุด (window.top) เปิดลิงก์เดียวกันแทนทันที ผลลัพธ์จะเหมือนกับเปิดลิงก์ผ่านเบราว์เซอร์โดยตรงทุกประการ
-// รวมถึงการแปลงลิงก์สั้น ?id=รหัสประจำตัว ให้เป็นลิงก์เต็มอัตโนมัติ (แก้ไขแถบที่อยู่จริงของเบราว์เซอร์ได้ ซึ่งทำไม่ได้ถ้ายังอยู่ใน iframe)
-(function breakOutOfIframe() {
-  try {
-    if (window.top && window.top !== window.self) {
-      window.top.location.replace(window.location.href);
-    }
-  } catch (e) {
-    // ข้าม origin เบราว์เซอร์ยังอนุญาตให้ "สั่งนำทาง" ได้ตามปกติ (ต่างจากการ "อ่านค่า" ที่ถูกบล็อก) จึงลองสั่งซ้ำแบบปลอดภัย
-    try { window.top.location.href = window.location.href; } catch (e2) { /* ถูกบล็อกจริงๆ โดย sandbox ของ iframe (ไม่มี allow-top-navigation) ก็ปล่อยให้แสดงต่อในกรอบเดิม */ }
-  }
-})();
+// v3.9: เอาการ "ดีดตัวเองออกจาก iframe" (window.top.location) ออก
+// เหตุผล: หน้าที่ฝังหน้านี้ (เช่น พอร์ทัลครู) ตั้ง sandbox แบบ allow-top-navigation-by-user-activation
+// ทำให้เบราว์เซอร์บล็อกการนำทางหน้าต่างบนสุดที่ไม่ได้เกิดจากการคลิกของผู้ใช้ (Unsafe attempt to initiate navigation)
+// และการดีดออกก็ทำให้ผู้ใช้หลุดจากพอร์ทัลที่ฝังไว้ด้วย
+// ทางแก้: แปลงลิงก์เป็นแบบเต็ม ?id=รหัสโรงเรียน&u=รหัสประจำตัว ด้วย history.replaceState "ภายในกรอบ iframe เอง"
+// (ดู canonViewUrl ด้านล่าง) ซึ่งใช้ได้ทั้งตอนเปิดตรงๆ และตอนฝังใน iframe โดยไม่ติดข้อจำกัด sandbox
 
 // ใส่ลิงก์รูปตราครุฑ (ถ้ามี) เพื่อแสดงบนหัวคำสั่ง เช่น 'https://.../garuda.png' · เว้นว่างไว้ = เว้นที่ว่างแทน
 const EMBLEM_URL = '';
 
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.4.1';
 const DEV_NAME = 'นายเอกวิทย์ สมาน';
 const DEV_PHONE = '0952200855';
 const DEV_FB = 'https://www.facebook.com/aekkawit.saman';
@@ -1640,9 +1632,12 @@ function showPortalHelp() {
 // =====================================================================
 // ---------- โหมดผู้ชม (ครู/นักเรียน) ----------
 // รองรับลิงก์:
-//   แบบเต็ม  ?id=รหัสโรงเรียน&u=รหัสประจำตัว
-//   แบบสั้น  ?id=รหัสประจำตัว
-//   แบบเพี้ยน ?id=รหัสโรงเรียน&u?id=รหัสประจำตัว (หรือ &รหัสประจำตัว) → เปิดได้ แล้วแปลงเป็นแบบเต็มในแถบที่อยู่ทันที
+//   แบบเต็ม   ?id=รหัสโรงเรียน&u=รหัสประจำตัว
+//   แบบสั้น   ?id=รหัสประจำตัว
+//   แบบเพี้ยน ?id=รหัสโรงเรียน&u?id=รหัสประจำตัว
+//             ?id=รหัสโรงเรียน&u&id=รหัสประจำตัว  (หน้าที่ฝัง iframe มักแปลง ? เป็น & ให้)
+//             ?id=รหัสโรงเรียน&รหัสประจำตัว
+//   → เปิดได้ทั้งหมด แล้วแปลงเป็นแบบเต็มในแถบที่อยู่ (ของ iframe เอง) ทันทีด้วย history.replaceState
 // แสดงเน้น "วันนี้/ตอนนี้" และตารางแนวตั้ง (แถว = คาบ, คอลัมน์ = วัน) เหมาะกับมือถือ
 // =====================================================================
 let viewCode = '', viewPid = '', viewTimer = null, viewLoaded = false, viewBusy = false, viewPrintHtml = '';
@@ -1650,23 +1645,31 @@ let viewData = null, viewClock = null, viewScrolled = false;
 
 function viewParams() {
   const q = new URLSearchParams(location.search);
-  const id = (q.get('id') || '').trim();
+  const PID_KEYS = ['u', 'uid', 'pid', 'p'];
+  // id อาจมีซ้ำ 2 ตัว เช่น ?id=SCKZPJ&u&id=รหัสประจำตัว → ตัวแรก = รหัสโรงเรียน, ตัวที่สอง = รหัสประจำตัว
+  const ids = q.getAll('id').map(s => s.trim()).filter(Boolean);
   let pid = '';
-  for (const k of ['u', 'uid', 'pid', 'p']) { if ((q.get(k) || '').trim()) { pid = q.get(k).trim(); break; } }
+  // 1) รูปแบบปกติ &u=รหัสประจำตัว
+  for (const k of PID_KEYS) { if ((q.get(k) || '').trim()) { pid = q.get(k).trim(); break; } }
+  // 2) id ซ้ำ: &u&id=รหัสประจำตัว
+  if (!pid && ids.length > 1) pid = ids[1];
+  // 3) รูปแบบเพี้ยนอื่นๆ
   if (!pid) {
     for (const [k, v] of q.entries()) {
       if (k === 'id') continue;
-      // ลิงก์เพี้ยน: &u?id=รหัส (ชื่อพารามิเตอร์ขึ้นต้นด้วย u?/uid?/pid?/p?)
+      // &u?id=รหัส → ชื่อพารามิเตอร์ขึ้นต้นด้วย u?/uid?/pid?/p?
       if (/^(u|uid|pid|p)\?.*$/i.test(k) && v.trim()) { pid = v.trim(); break; }
-      // รูปแบบ &รหัสประจำตัว (ไม่มีชื่อพารามิเตอร์)
-      if (v === '' && k.trim()) { pid = k.trim(); break; }
+      // &รหัสประจำตัว (ไม่มีชื่อพารามิเตอร์) — ข้ามคีย์ u/uid/pid/p ที่ไม่มีค่า ไม่ให้เข้าใจผิดว่าเป็นรหัส
+      if (v === '' && k.trim() && !PID_KEYS.includes(k.trim().toLowerCase())) { pid = k.trim(); break; }
     }
   }
-  // ไม่มี u → ลิงก์สั้น ?id=รหัสประจำตัว ให้เซิร์ฟเวอร์ค้นหาโรงเรียนเอง
-  if (id && !pid) return { code: '', pid: id };
-  return { code: id, pid };
+  const code = ids[0] || '';
+  // ไม่มี pid → ลิงก์สั้น ?id=รหัสประจำตัว ให้เซิร์ฟเวอร์ค้นหาโรงเรียนเอง
+  if (code && !pid) return { code: '', pid: code };
+  return { code, pid };
 }
 // แปลงลิงก์ในแถบที่อยู่เป็นแบบเต็ม ?id=รหัสโรงเรียน&u=รหัสประจำตัว (ทำได้เมื่อรู้ทั้งสองค่า)
+// ใช้ replaceState จึงแก้ได้เฉพาะ URL ของหน้านี้เอง (ถ้าฝังใน iframe ก็คือ URL ของ iframe) ไม่ต้องแตะหน้าต่างบนสุด
 function canonViewUrl() {
   if (!viewCode || !viewPid) return;
   try { history.replaceState(null, '', portalLink(viewCode, viewPid, location.origin + location.pathname)); } catch (e) {}
