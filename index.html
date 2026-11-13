@@ -314,14 +314,10 @@ body { font-family:'Sarabun',sans-serif; background:#f8fafc; }
           <select id="pcTerm" class="border p-2 rounded text-sm w-full"></select></div>
       </div>
       <div class="mt-4 text-sm">
-        <div class="font-semibold mb-1">เลือกลิงก์ที่ใช้ส่งให้ครู/นักเรียน</div>
-        <div class="flex flex-wrap gap-x-5 gap-y-1 mb-2">
-          <label class="inline-flex items-center cursor-pointer"><input type="radio" name="pcLinkKind" value="github" checked onchange="onLinkKindChange()" class="mr-1.5"><span>GitHub Pages <span class="text-[11px] text-emerald-600">(แนะนำ)</span></span></label>
-          <label class="inline-flex items-center cursor-pointer"><input type="radio" name="pcLinkKind" value="exec" onchange="onLinkKindChange()" class="mr-1.5"><span>Apps Script (/exec)</span></label>
-        </div>
+        <div class="font-semibold mb-1">ลิงก์ที่ใช้ส่งให้ครู/นักเรียน <span class="text-[11px] font-normal text-gray-500">(GitHub Pages)</span></div>
         <div class="flex gap-2"><code id="pcLink" class="flex-grow bg-white border rounded px-2 py-1.5 text-xs break-all"></code>
           <button type="button" onclick="copyPortalLink()" class="bg-brand-600 text-white px-3 rounded-lg text-xs whitespace-nowrap"><i class="fa-regular fa-copy mr-1"></i>คัดลอก</button></div>
-        <p class="text-[11px] text-gray-500 mt-1">แทนที่คำว่า "รหัสประจำตัว" ด้วยรหัสครูหรือรหัสนักเรียน · ระบบเช็คชีทครูก่อน ถ้าไม่พบจึงเช็คชีทนักเรียน</p>
+        <p class="text-[11px] text-gray-500 mt-1">แทนที่คำว่า "รหัสประจำตัว" ด้วยรหัสครูหรือรหัสนักเรียน · ระบบเช็คชีทครูก่อน ถ้าไม่พบจึงเช็คชีทนักเรียน · ลิงก์สั้นจากระบบหลัก <code>?id=รหัสประจำตัว</code> ก็เปิดได้ และระบบจะแปลงเป็นลิงก์แบบเต็มให้อัตโนมัติ</p>
 
         <div class="mt-3 pt-3 border-t border-blue-100">
           <div class="font-semibold mb-1">ทดลองเปิดลิงก์</div>
@@ -382,19 +378,15 @@ body { font-family:'Sarabun',sans-serif; background:#f8fafc; }
 // ใส่ลิงก์รูปตราครุฑ (ถ้ามี) เพื่อแสดงบนหัวคำสั่ง เช่น 'https://.../garuda.png' · เว้นว่างไว้ = เว้นที่ว่างแทน
 const EMBLEM_URL = '';
 
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.4.0';
 const DEV_NAME = 'นายเอกวิทย์ สมาน';
 const DEV_PHONE = '0952200855';
 const DEV_FB = 'https://www.facebook.com/aekkawit.saman';
 
-// URL ของ Apps Script Web App (deploy แบบ Execute as: Me, Who has access: Anyone)
+// URL ของ Apps Script Web App (deploy แบบ Execute as: Me, Who has access: Anyone) ใช้เป็น API เท่านั้น
 const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbxAhOte4I7j977sh8NW93IVKkLYMDcouieOqR1dwPa6HBuorTBuwlqsaROvAHdy2bogIw/exec';
-// URL หน้าเว็บบน GitHub Pages
+// URL หน้าเว็บบน GitHub Pages (ลิงก์ที่ส่งให้ครู/นักเรียนใช้ตัวนี้)
 const GITHUB_URL = 'https://tadika-app.github.io/schedule/';
-
-// พารามิเตอร์จากเซิร์ฟเวอร์ (ใช้เมื่อเปิดผ่านลิงก์ /exec ของ Apps Script) · บน GitHub Pages จะเป็นค่าว่าง
-let SERVER_PARAMS = {};
-try { SERVER_PARAMS = JSON.parse(decodeURIComponent('<?!= pj ?>')); } catch (e) {}
 
 function copyPhone() {
   navigator.clipboard.writeText(DEV_PHONE).then(() => toast('คัดลอกเบอร์พร้อมเพย์แล้ว'));
@@ -479,9 +471,9 @@ function applySnapshot(d) {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  // โหมดผู้ชม: เปิดด้วยลิงก์ ?id=รหัสโรงเรียน&u=รหัสประจำตัว
+  // โหมดผู้ชม: เปิดด้วยลิงก์ ?id=รหัสโรงเรียน&u=รหัสประจำตัว หรือลิงก์สั้น ?id=รหัสประจำตัว
   const vp = viewParams();
-  if (vp.code) { startViewer(vp.code, vp.pid); return; }
+  if (vp.code || vp.pid) { startViewer(vp.code, vp.pid); return; }
 
   $('daysContainer').innerHTML = DAYS.map((d, i) =>
     `<label class="inline-flex items-center"><input type="checkbox" value="${d}" ${i < 5 ? 'checked' : ''} class="rounded text-brand-600"><span class="ml-1.5 text-sm">${d}</span></label>`).join('');
@@ -1490,21 +1482,10 @@ function runAuto(mode, g, allGrades) {
 // =====================================================================
 // ---------- แอดมิน: ตั้งค่าลิงก์ดูตาราง + ชีทข้อมูลครู/นักเรียน ----------
 // =====================================================================
-const LINK_KIND_KEY = 'gas_link_kind';
-function linkKind() {
-  const r = document.querySelector('input[name="pcLinkKind"]:checked');
-  return r ? r.value : 'github';
-}
-function baseOf(kind) { return kind === 'exec' ? WEBAPP_URL : GITHUB_URL; }
+// ลิงก์แบบเต็ม (เปิดชีทเดียว เร็ว): GitHub Pages ?id=รหัสโรงเรียน&u=รหัสประจำตัว
 function portalLink(code, pid, base) {
-  return `${base || baseOf(linkKind())}?id=${encodeURIComponent(code)}&u=${encodeURIComponent(pid)}`;
-}
-function setLinkKind(kind) {
-  document.querySelectorAll('input[name="pcLinkKind"]').forEach(r => { r.checked = (r.value === kind); });
-}
-function onLinkKindChange() {
-  try { localStorage.setItem(LINK_KIND_KEY, linkKind()); } catch (e) {}
-  updatePortalLinks();
+  const b = base || GITHUB_URL;
+  return code ? `${b}?id=${encodeURIComponent(code)}&u=${encodeURIComponent(pid)}` : `${b}?id=${encodeURIComponent(pid)}`;
 }
 
 function loadPortalConfig(force) {
@@ -1522,8 +1503,6 @@ function fillPortalForm() {
   $('pcCode').value = portalCfg.schoolCode || '';
   $('ptSheetId').value = t.sheetId || ''; $('ptSheetName').value = t.sheetName || ''; $('ptIdCol').value = t.idCol || ''; $('ptNameCol').value = t.nameCol || '';
   $('psSheetId').value = s.sheetId || ''; $('psSheetName').value = s.sheetName || ''; $('psIdCol').value = s.idCol || ''; $('psNameCol').value = s.nameCol || ''; $('psGradeCol').value = s.gradeCol || '';
-  let k = 'github'; try { k = localStorage.getItem(LINK_KIND_KEY) || 'github'; } catch (e) {}
-  setLinkKind(k === 'exec' ? 'exec' : 'github');
   renderPortalTerms(); updatePortalLinks();
 }
 function renderPortalTerms() {
@@ -1542,7 +1521,7 @@ function readPortalCfg() {
 }
 function updatePortalLinks() {
   const code = $('pcCode').value.trim().toUpperCase(), pid = $('pcTestId').value.trim();
-  $('pcLink').innerText = `${baseOf(linkKind())}?id=${code || 'รหัสโรงเรียน'}&u=รหัสประจำตัว`;
+  $('pcLink').innerText = `${GITHUB_URL}?id=${code || 'รหัสโรงเรียน'}&u=รหัสประจำตัว`;
   $('pcTestLink').innerText = pid ? portalLink(code || 'รหัสโรงเรียน', pid) : 'พิมพ์รหัสครู/นักเรียนด้านบน แล้วลิงก์ทดสอบจะแสดงที่นี่';
 }
 function randomPortalCode() {
@@ -1630,9 +1609,9 @@ function showPortalHelp() {
           (จะตั้งเฉพาะครู หรือเฉพาะนักเรียนอย่างเดียวก็ได้ ปล่อยอีกชีทว่างไว้)</li>
         <li style="${li}">กด <b>"ทดสอบการเชื่อมต่อ"</b> เพื่อดูว่าอ่านข้อมูลได้ถูกต้อง แล้วกด <b>"บันทึกการตั้งค่า"</b></li>
         <li style="${li}"><b>รหัสโรงเรียน</b> — ระบบสุ่มให้ แก้เองหรือกด "สุ่มใหม่" ได้ (หากเปลี่ยนรหัส ลิงก์เดิมจะใช้ไม่ได้)</li>
-        <li style="${li}"><b>เลือกลิงก์และส่งให้ครู/นักเรียน</b> ได้ 2 แบบ<br>
-          • GitHub Pages (แนะนำ): <code style="${cd}">${esc(GITHUB_URL)}?id=รหัสโรงเรียน&amp;u=รหัสประจำตัว</code><br>
-          • Apps Script: <code style="${cd}">${esc(WEBAPP_URL)}?id=รหัสโรงเรียน&amp;u=รหัสประจำตัว</code><br>
+        <li style="${li}"><b>ส่งลิงก์ให้ครู/นักเรียน</b> (ใช้ GitHub Pages)<br>
+          • แบบเต็ม (เร็วที่สุด): <code style="${cd}">${esc(GITHUB_URL)}?id=รหัสโรงเรียน&amp;u=รหัสประจำตัว</code><br>
+          • แบบสั้นจากระบบหลัก: <code style="${cd}">${esc(GITHUB_URL)}?id=รหัสประจำตัว</code> — ระบบค้นหาโรงเรียนให้ แล้วแปลงเป็นแบบเต็มอัตโนมัติ<br>
           ลองกรอกรหัสในช่อง "ทดลองเปิดลิงก์" แล้วกด "เปิดลิงก์ทดสอบ" เพื่อดูผลจริงก่อนส่งให้ผู้ใช้</li>
         <li style="${li}">ระบบจะ <b>เช็ครหัสในชีทครูก่อน</b> ถ้าพบ → แสดงตารางสอนของครูคนนั้นแบบเรียลไทม์<br>
           ถ้าไม่พบจึงเช็ค <b>ชีทนักเรียน</b> → แสดงตารางเรียนของระดับชั้นนั้น<br>
@@ -1644,28 +1623,45 @@ function showPortalHelp() {
 }
 
 // =====================================================================
-// ---------- โหมดผู้ชม (ครู/นักเรียน) — ?id=รหัสโรงเรียน&u=รหัสประจำตัว ----------
+// ---------- โหมดผู้ชม (ครู/นักเรียน) ----------
+// รองรับลิงก์:
+//   แบบเต็ม  ?id=รหัสโรงเรียน&u=รหัสประจำตัว
+//   แบบสั้น  ?id=รหัสประจำตัว
+//   แบบเพี้ยน ?id=รหัสโรงเรียน&u?id=รหัสประจำตัว (หรือ &รหัสประจำตัว) → เปิดได้ แล้วแปลงเป็นแบบเต็มในแถบที่อยู่ทันที
 // แสดงเน้น "วันนี้/ตอนนี้" และตารางแนวตั้ง (แถว = คาบ, คอลัมน์ = วัน) เหมาะกับมือถือ
 // =====================================================================
 let viewCode = '', viewPid = '', viewTimer = null, viewLoaded = false, viewBusy = false, viewPrintHtml = '';
 let viewData = null, viewClock = null, viewScrolled = false;
 
 function viewParams() {
-  let q = new URLSearchParams(location.search);
-  // เปิดผ่าน /exec ของ Apps Script: พารามิเตอร์มากับ SERVER_PARAMS (ฝั่งเซิร์ฟเวอร์ส่งเข้ามา)
-  if (!q.get('id') && SERVER_PARAMS && SERVER_PARAMS.id) q = new URLSearchParams(SERVER_PARAMS);
-  const code = (q.get('id') || '').trim();
-  let pid = (q.get('u') || q.get('uid') || q.get('pid') || q.get('p') || '').trim();
-  if (!pid) {   // รองรับรูปแบบ ?id=CODE&รหัสประจำตัว (ไม่มีชื่อพารามิเตอร์)
-    for (const k of q.keys()) { if (k !== 'id' && q.get(k) === '') { pid = k.trim(); break; } }
+  const q = new URLSearchParams(location.search);
+  const id = (q.get('id') || '').trim();
+  let pid = '';
+  for (const k of ['u', 'uid', 'pid', 'p']) { if ((q.get(k) || '').trim()) { pid = q.get(k).trim(); break; } }
+  if (!pid) {
+    for (const [k, v] of q.entries()) {
+      if (k === 'id') continue;
+      // ลิงก์เพี้ยน: &u?id=รหัส (ชื่อพารามิเตอร์ขึ้นต้นด้วย u?/uid?/pid?/p?)
+      if (/^(u|uid|pid|p)\?.*$/i.test(k) && v.trim()) { pid = v.trim(); break; }
+      // รูปแบบ &รหัสประจำตัว (ไม่มีชื่อพารามิเตอร์)
+      if (v === '' && k.trim()) { pid = k.trim(); break; }
+    }
   }
-  return { code, pid };
+  // ไม่มี u → ลิงก์สั้น ?id=รหัสประจำตัว ให้เซิร์ฟเวอร์ค้นหาโรงเรียนเอง
+  if (id && !pid) return { code: '', pid: id };
+  return { code: id, pid };
+}
+// แปลงลิงก์ในแถบที่อยู่เป็นแบบเต็ม ?id=รหัสโรงเรียน&u=รหัสประจำตัว (ทำได้เมื่อรู้ทั้งสองค่า)
+function canonViewUrl() {
+  if (!viewCode || !viewPid) return;
+  try { history.replaceState(null, '', portalLink(viewCode, viewPid, location.origin + location.pathname)); } catch (e) {}
 }
 function startViewer(code, pid) {
-  viewCode = code; viewPid = pid || '';
+  viewCode = code || ''; viewPid = pid || '';
   $('authSection').classList.add('hidden'); $('navbar').classList.add('hidden'); $('appSection').classList.add('hidden');
   $('viewSection').classList.remove('hidden');
   if (!viewPid) { $('vLookup').classList.remove('hidden'); $('vPid').focus(); return; }
+  canonViewUrl();   // ลิงก์เพี้ยนที่มีครบทั้งสองค่า → แก้ในแถบที่อยู่ทันที
   loadView(false); startViewPolling();
 }
 function startViewPolling() {
@@ -1679,7 +1675,8 @@ function submitLookup() {
   const v = $('vPid').value.trim();
   if (!v) return toast('กรุณากรอกรหัสประจำตัว', 'info');
   viewPid = v; viewLoaded = false;
-  try { history.replaceState(null, '', portalLink(viewCode, viewPid, location.href.split('#')[0].split('?')[0])); } catch (e) {}
+  canonViewUrl();
+  if (!viewCode) { try { history.replaceState(null, '', portalLink('', viewPid, location.origin + location.pathname)); } catch (e) {} }
   loadView(false); startViewPolling();
 }
 function setViewMsg(html, kind) {
@@ -1699,6 +1696,8 @@ function loadView(quiet) {
       viewLoaded = false; viewData = null;
       $('vGridCard').classList.add('hidden'); $('vNow').innerHTML = ''; $('vPrintBtn').classList.add('hidden'); $('vWho').innerText = '';
       setViewMsg('<i class="fa-solid fa-circle-exclamation mr-1"></i>' + esc(d.message), 'error');
+      // ลิงก์มีแค่รหัสโรงเรียน → จำรหัสโรงเรียนไว้ แล้วให้กรอกรหัสประจำตัว
+      if (d.schoolCode) { viewCode = d.schoolCode; viewPid = ''; }
       if (d.needId) $('vLookup').classList.remove('hidden');
       return;
     }
@@ -1801,6 +1800,9 @@ function renderViewBody() {
 function renderView(d) {
   viewLoaded = true;
   $('vLookup').classList.add('hidden');
+  // ลิงก์สั้น ?id=รหัสประจำตัว → เซิร์ฟเวอร์ส่งรหัสโรงเรียนกลับมา: จำไว้ให้รอบถัดไปใช้ทางลัด และแปลงลิงก์ในแถบที่อยู่เป็นแบบเต็ม
+  if (d.schoolCode) viewCode = d.schoolCode;
+  canonViewUrl();
   // ตั้งค่าตัวแปรที่ gridHtml / colorFor / curTerm ใช้
   currentUser = { schoolName: d.schoolName || '' };
   currentTerm = d.term; allTermsData = {}; allTermsData[d.term] = normTerm(d.termSettings, d.term);
