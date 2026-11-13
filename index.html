@@ -375,6 +375,21 @@ body { font-family:'Sarabun',sans-serif; background:#f8fafc; }
 <div id="printContainer"></div>
 
 <script>
+// ===== v3.8: ดีดตัวเองออกจาก iframe อัตโนมัติ (ต้องอยู่บนสุดของสคริปต์ ก่อนโค้ดอื่นทั้งหมด) =====
+// ถ้าหน้านี้ถูกเปิดอยู่ใน iframe ของเว็บไซต์อื่น หรือถูกพรีวิวเป็น iframe โดยแอปแชท/เบราว์เซอร์บางตัว
+// ให้สั่งหน้าต่างบนสุด (window.top) เปิดลิงก์เดียวกันแทนทันที ผลลัพธ์จะเหมือนกับเปิดลิงก์ผ่านเบราว์เซอร์โดยตรงทุกประการ
+// รวมถึงการแปลงลิงก์สั้น ?id=รหัสประจำตัว ให้เป็นลิงก์เต็มอัตโนมัติ (แก้ไขแถบที่อยู่จริงของเบราว์เซอร์ได้ ซึ่งทำไม่ได้ถ้ายังอยู่ใน iframe)
+(function breakOutOfIframe() {
+  try {
+    if (window.top && window.top !== window.self) {
+      window.top.location.replace(window.location.href);
+    }
+  } catch (e) {
+    // ข้าม origin เบราว์เซอร์ยังอนุญาตให้ "สั่งนำทาง" ได้ตามปกติ (ต่างจากการ "อ่านค่า" ที่ถูกบล็อก) จึงลองสั่งซ้ำแบบปลอดภัย
+    try { window.top.location.href = window.location.href; } catch (e2) { /* ถูกบล็อกจริงๆ โดย sandbox ของ iframe (ไม่มี allow-top-navigation) ก็ปล่อยให้แสดงต่อในกรอบเดิม */ }
+  }
+})();
+
 // ใส่ลิงก์รูปตราครุฑ (ถ้ามี) เพื่อแสดงบนหัวคำสั่ง เช่น 'https://.../garuda.png' · เว้นว่างไว้ = เว้นที่ว่างแทน
 const EMBLEM_URL = '';
 
