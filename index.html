@@ -43,6 +43,7 @@ body { font-family:'Sarabun',sans-serif; background:#f8fafc; }
       <span class="font-bold text-lg truncate" id="navSchoolName">ระบบจัดตารางสอน</span>
     </div>
     <div class="flex items-center space-x-3">
+      <button onclick="showPrintSettings()" class="hover:text-blue-300 text-lg" title="ตั้งค่าโลโก้และช่องลงชื่อตอนพิมพ์"><i class="fa-solid fa-print"></i></button>
       <button onclick="showInfoModal()" class="hover:text-blue-300 text-lg" title="เกี่ยวกับโปรแกรม"><i class="fa-solid fa-circle-info"></i></button>
       <span class="text-sm hidden sm:inline"><i class="fa-solid fa-user-circle mr-1"></i><span id="navTeacherName"></span></span>
       <button onclick="logout()" class="bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-lg text-sm"><i class="fa-solid fa-right-from-bracket mr-1"></i>ออกจากระบบ</button>
@@ -385,7 +386,7 @@ body { font-family:'Sarabun',sans-serif; background:#f8fafc; }
 // ใส่ลิงก์รูปตราครุฑ (ถ้ามี) เพื่อแสดงบนหัวคำสั่ง เช่น 'https://.../garuda.png' · เว้นว่างไว้ = เว้นที่ว่างแทน
 const EMBLEM_URL = '';
 
-const APP_VERSION = '1.4.1';
+const APP_VERSION = '1.4.2';
 const DEV_NAME = 'นายเอกวิทย์ สมาน';
 const DEV_PHONE = '0952200855';
 const DEV_FB = 'https://www.facebook.com/aekkawit.saman';
@@ -888,6 +889,64 @@ function placedMenu(pl) {
 }
 
 // ---------- Print ----------
+// ---------- โลโก้ + ช่องลงชื่อตอนพิมพ์ (เก็บในเบราว์เซอร์ ผูกกับอีเมลผู้ใช้) ----------
+function printCfgKey() { return currentUser && currentUser.email ? 'gas_printcfg_' + currentUser.email : ''; }
+function getPrintCfg() {
+  const k = printCfgKey(); if (!k) return null;   // โหมดผู้ชม (ครู/นักเรียน) ไม่มีโลโก้/ช่องลงชื่อ
+  try { return JSON.parse(localStorage.getItem(k) || '{}'); } catch (e) { return {}; }
+}
+function printHeadHtml() {
+  const c = getPrintCfg();
+  return c && c.logo ? `<div style="text-align:center;margin-bottom:4px"><img src="${c.logo}" alt="logo" style="height:2.2cm;max-width:5cm;object-fit:contain"></div>` : '';
+}
+function printSignHtml() {
+  const c = getPrintCfg(); if (!c) return '';
+  const dots = '..............................................';
+  const blk = (role, name) => `<div style="width:45%;text-align:center;line-height:1.7"><div>ลงชื่อ ${dots}</div><div>(${esc(name || dots)})</div><div>${role}</div></div>`;
+  return `<div style="display:flex;justify-content:space-around;margin-top:30px;font-size:13px;page-break-inside:avoid">${blk('หัวหน้าฝ่ายวิชาการ', c.academic)}${blk('ผู้อำนวยการ', c.director)}</div>`;
+}
+function showPrintSettings() {
+  const k = printCfgKey(); if (!k) return;
+  const c = getPrintCfg() || {}; let logo = c.logo || '';
+  const inp = 'style="width:100%;margin:2px 0 8px;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:14px"';
+  Swal.fire({ title: 'ตั้งค่าหัว-ท้ายตารางที่พิมพ์', width: 420, showCancelButton: true, confirmButtonText: 'บันทึก', cancelButtonText: 'ยกเลิก',
+    html: `<div style="text-align:left;font-size:13px">
+      <label>โลโก้โรงเรียน (PNG/JPG)</label>
+      <div style="display:flex;align-items:center;gap:10px;margin:4px 0 10px">
+        <img id="pfPrev" alt="" style="height:64px;max-width:120px;object-fit:contain;border:1px solid #e5e7eb;border-radius:6px;padding:2px;display:none">
+        <div><input id="pfLogo" type="file" accept="image/*" style="font-size:12px"><br><button type="button" id="pfClear" style="margin-top:4px;font-size:12px;color:#dc2626">ลบโลโก้</button></div>
+      </div>
+      <label>ชื่อหัวหน้าฝ่ายวิชาการ</label><input id="pfAcad" ${inp} value="${esc(c.academic || '')}" placeholder="เช่น นางสาวสมหญิง รักเรียน">
+      <label>ชื่อผู้อำนวยการ</label><input id="pfDir" ${inp} value="${esc(c.director || '')}" placeholder="เช่น นายสมชาย ใจดี">
+      <p style="color:#6b7280;font-size:12px">ถ้าเว้นชื่อว่างไว้ จะพิมพ์เป็นเส้นประให้เซ็นด้วยมือ · ข้อมูลนี้เก็บในเบราว์เซอร์เครื่องนี้</p></div>`,
+    didOpen: () => {
+      const prev = $('pfPrev'), show = () => { if (logo) { prev.src = logo; prev.style.display = ''; } else prev.style.display = 'none'; };
+      show();
+      $('pfClear').onclick = () => { logo = ''; $('pfLogo').value = ''; show(); };
+      $('pfLogo').onchange = e => {
+        const f = e.target.files[0]; if (!f) return;
+        const rd = new FileReader();
+        rd.onload = () => {
+          const im = new Image();
+          im.onload = () => {
+            const s = Math.min(1, 300 / Math.max(im.width, im.height)), cv = document.createElement('canvas');
+            cv.width = Math.round(im.width * s); cv.height = Math.round(im.height * s);
+            cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
+            logo = cv.toDataURL('image/png'); show();
+          };
+          im.src = rd.result;
+        };
+        rd.readAsDataURL(f);
+      };
+    },
+    preConfirm: () => ({ logo, academic: $('pfAcad').value.trim(), director: $('pfDir').value.trim() })
+  }).then(r => {
+    if (!r.isConfirmed) return;
+    try { localStorage.setItem(k, JSON.stringify(r.value)); toast('บันทึกการตั้งค่าแล้ว'); }
+    catch (e) { Swal.fire('บันทึกไม่สำเร็จ', 'พื้นที่จัดเก็บเต็ม ลองใช้รูปโลโก้ที่เล็กลง', 'error'); }
+  });
+}
+
 function setPageStyle(css) {
   let s = $('pageStyle');
   if (!s) { s = document.createElement('style'); s.id = 'pageStyle'; document.head.appendChild(s); }
@@ -905,7 +964,7 @@ function gridHtml(title, entries, textFn, color, footer, hiDay) {
   const thS = color ? 'background:#1e3a8a;color:#fff;' : 'background:#f3f4f6;';
   const dayS = color ? 'background:#dbeafe;color:#1e3a8a;' : '';
   const brkS = color ? 'background:#e5e7eb;' : 'background:#f3f4f6;';
-  let h = `<div style="font-family:'Sarabun',sans-serif"><h2 style="text-align:center;font-weight:bold;font-size:16px;margin:0">${esc(currentUser.schoolName)}</h2><h3 style="text-align:center;margin:2px 0 6px;font-size:14px">${esc(title)} ภาคเรียนที่ ${esc(currentTerm)}</h3><table class="pt" style="width:100%;border-collapse:collapse"><tr><th style="${thS}">วัน/คาบ</th>`;
+  let h = `<div style="font-family:'Sarabun',sans-serif">${printHeadHtml()}<h2 style="text-align:center;font-weight:bold;font-size:16px;margin:0">${esc(currentUser.schoolName)}</h2><h3 style="text-align:center;margin:2px 0 6px;font-size:14px">${esc(title)} ภาคเรียนที่ ${esc(currentTerm)}</h3><table class="pt" style="width:100%;border-collapse:collapse"><tr><th style="${thS}">วัน/คาบ</th>`;
   for (let p = 1; p <= n; p++) { h += `<th style="${thS}">คาบ ${p}<br>${esc(slots[p - 1].time)}</th>`; if (slots[p - 1].brk) h += `<th style="${thS}">พัก</th>`; }
   h += '</tr>';
   days.forEach((day, di) => {
@@ -922,7 +981,7 @@ function gridHtml(title, entries, textFn, color, footer, hiDay) {
     }
     h += '</tr>';
   });
-  return h + '</table>' + (footer ? `<p style="font-size:12px;margin-top:6px">${footer}</p>` : '') + '</div>';
+  return h + '</table>' + (footer ? `<p style="font-size:12px;margin-top:6px">${footer}</p>` : '') + printSignHtml() + '</div>';
 }
 const LANDSCAPE_CSS = '@page{size:A4 landscape;margin:10mm}';
 const colorOptionHtml = '<label style="display:flex;align-items:center;gap:8px;font-size:15px;margin-top:12px"><input type="checkbox" id="poColor" checked style="width:18px;height:18px"> พิมพ์กราฟิกพื้นหลัง (ลงสีวิชาเหมือนในระบบ)</label><p style="font-size:12px;color:#6b7280;margin-top:6px">กระดาษ A4 แนวนอน · ถ้าไม่ติ๊กจะพิมพ์ขาวดำ ประหยัดหมึก</p>';
@@ -1081,7 +1140,7 @@ function printModel(m) {
   Swal.fire({ title: 'ตั้งค่าก่อนพิมพ์ ' + m.title, html: `<div style="text-align:left">${colorOptionHtml}</div>`, showCancelButton: true, confirmButtonText: 'พิมพ์', cancelButtonText: 'ยกเลิก',
     preConfirm: () => ({ color: $('poColor').checked }) }).then(r => {
     if (!r.isConfirmed) return;
-    doPrint(`<div style="font-family:'Sarabun',sans-serif"><h2 style="text-align:center;font-weight:bold;font-size:16px;margin:0">${esc(currentUser.schoolName)}</h2><h3 style="text-align:center;margin:2px 0 6px;font-size:14px">${esc(m.title)} ภาคเรียนที่ ${esc(currentTerm)}</h3>${modelToHtml(m, r.value.color, m.compact)}${m.footer ? `<p style="font-size:12px;margin-top:6px">${esc(m.footer)}</p>` : ''}</div>`, LANDSCAPE_CSS);
+    doPrint(`<div style="font-family:'Sarabun',sans-serif">${printHeadHtml()}<h2 style="text-align:center;font-weight:bold;font-size:16px;margin:0">${esc(currentUser.schoolName)}</h2><h3 style="text-align:center;margin:2px 0 6px;font-size:14px">${esc(m.title)} ภาคเรียนที่ ${esc(currentTerm)}</h3>${modelToHtml(m, r.value.color, m.compact)}${m.footer ? `<p style="font-size:12px;margin-top:6px">${esc(m.footer)}</p>` : ''}${printSignHtml()}</div>`, LANDSCAPE_CSS);
   });
 }
 
